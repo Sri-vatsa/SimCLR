@@ -26,30 +26,41 @@ class SimCLR(object):
     def info_nce_loss(self, features):
 
         labels = torch.cat([torch.arange(self.args.batch_size) for i in range(self.args.n_views)], dim=0)
+        print("inl-labels: {}".format(labels.shape))
         labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
+        print("inl-labels boolean: {}".format(labels.shape))
         labels = labels.to(self.args.device)
 
         features = F.normalize(features, dim=1)
+        print("inl-features: {}".format(features.shape))
 
         similarity_matrix = torch.matmul(features, features.T)
+        print("inl-similarity_matrix: {}".format(similarity_matrix.shape))
         # assert similarity_matrix.shape == (
         #     self.args.n_views * self.args.batch_size, self.args.n_views * self.args.batch_size)
         # assert similarity_matrix.shape == labels.shape
 
         # discard the main diagonal from both: labels and similarities matrix
         mask = torch.eye(labels.shape[0], dtype=torch.bool).to(self.args.device)
+        print("inl-mask: {}".format(mask.shape))
         labels = labels[~mask].view(labels.shape[0], -1)
+        print("inl-labels view reshaped: {}".format(labels.shape))
         similarity_matrix = similarity_matrix[~mask].view(similarity_matrix.shape[0], -1)
+        print("inl-similarity_matrix with mask: {}".format(similarity_matrix.shape))
         # assert similarity_matrix.shape == labels.shape
 
         # select and combine multiple positives
         positives = similarity_matrix[labels.bool()].view(labels.shape[0], -1)
+        print("inl-positives: {}".format(positives.shape))
 
         # select only the negatives the negatives
         negatives = similarity_matrix[~labels.bool()].view(similarity_matrix.shape[0], -1)
+        print("inl-negatives: {}".format(negatives.shape))
 
         logits = torch.cat([positives, negatives], dim=1)
         labels = torch.zeros(logits.shape[0], dtype=torch.long).to(self.args.device)
+        print("inl-logits: {}".format(logits.shape))
+        print("inl-labels: {}".format(labels.shape))
 
         logits = logits / self.args.temperature
         return logits, labels
@@ -67,13 +78,17 @@ class SimCLR(object):
 
         for epoch_counter in range(self.args.epochs):
             for images, _ in tqdm(train_loader):
+                print("train-len images: {}".format(len(images)))
                 images = torch.cat(images, dim=0)
-
+                print("images torch cat: {}".format(images.shape))
                 images = images.to(self.args.device)
 
                 with autocast(enabled=self.args.fp16_precision):
                     features = self.model(images)
+                    print("train-feats: {}".format(features.shape))
                     logits, labels = self.info_nce_loss(features)
+                    print("train-logits: {}".format(logits.shape))
+                    print("train-labels: {}".format(labels.shape))
                     loss = self.criterion(logits, labels)
 
                 self.optimizer.zero_grad()
